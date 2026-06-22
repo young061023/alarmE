@@ -382,6 +382,25 @@ main {
   display: none;
 }
 
+.ocr-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.report-score {
+  color: var(--primary);
+  font-size: clamp(48px, 8vw, 82px);
+  font-weight: 800;
+  line-height: 1;
+}
+
+.muted {
+  color: var(--muted);
+  line-height: 1.6;
+}
+
 .toast {
   position: fixed;
   right: 22px;
@@ -418,7 +437,7 @@ main {
     transition: transform 0.2s ease;
   }
 
-  body.menu-open .side {
+  .app.menu-open .side {
     transform: translateX(0);
   }
 
