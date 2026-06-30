@@ -373,8 +373,8 @@ export default function HomePage() {
       setMedicineForm({
         itemName: "",
         efcyQesitm: "",
-        doseTime: "08:00",
-        amount: "1정",
+        doseTime: "",
+        amount: "정",
         cautionNote: "",
       });
       notify("약과 복용 일정이 저장되었습니다.");
@@ -567,34 +567,12 @@ export default function HomePage() {
 
   async function startPillCamera() {
     try {
-if (!navigator.mediaDevices?.getUserMedia) {
-  setPillStatus("이 브라우저에서는 카메라를 바로 열 수 없습니다. 사진 선택을 사용해 주세요.");
-  return;
-}
-
-let stream;
-try {
-  stream = await navigator.mediaDevices.getUserMedia({
-    video: { facingMode: { ideal: "environment" } },
-    audio: false,
-  });
-} catch {
-  stream = await navigator.mediaDevices.getUserMedia({
-    video: true,
-    audio: false,
-  });
-}
-
-pillStreamRef.current = stream;
-const video = pillVideoRef.current;
-if (!video) {
-  stream.getTracks().forEach((track) => track.stop());
-  pillStreamRef.current = null;
-  setPillStatus("카메라 화면을 준비하지 못했습니다. 사진 선택으로 다시 시도해 주세요.");
-  return;
-}
-video.srcObject = stream;
-await video.play().catch(() => {});
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: "environment" } },
+        audio: false,
+      });
+      pillStreamRef.current = stream;
+      pillVideoRef.current.srcObject = stream;
       setPillCameraOn(true);
       setPillPreviewUrl("");
       setPillImageBlob(null);
@@ -645,14 +623,13 @@ await video.play().catch(() => {});
     setPillLoading(true);
     setPillStatus("누끼 제거 후 모델 추론 중입니다.");
     try {
-      const uploadBlob = await resizeImageBlob(pillImageBlob);
       const formData = new FormData();
-      formData.append("image", uploadBlob, "pill.jpg");
+      formData.append("image", pillImageBlob, "pill.jpg");
       const response = await fetch("/api/pill-recognition", {
         method: "POST",
         body: formData,
       });
-      const result = await readJsonResponse(response);
+      const result = await response.json();
       if (!response.ok) throw new Error(result.error || "AI 인식 실패");
       setPillPredictions(result.predictions || []);
       setPillDetails({});
@@ -676,54 +653,7 @@ await video.play().catch(() => {});
   function stopPillCamera() {
     pillStreamRef.current?.getTracks().forEach((track) => track.stop());
     pillStreamRef.current = null;
-    if (pillVideoRef.current) {
-      pillVideoRef.current.srcObject = null;
-    }
     setPillCameraOn(false);
-  }
-
-  async function readJsonResponse(response) {
-    const text = await response.text();
-    try {
-      return text ? JSON.parse(text) : {};
-    } catch {
-      const message = text
-        .replace(/<script[\s\S]*?<\/script>/gi, "")
-        .replace(/<style[\s\S]*?<\/style>/gi, "")
-        .replace(/<[^>]+>/g, " ")
-        .replace(/\s+/g, " ")
-        .trim()
-        .slice(0, 180);
-      throw new Error(
-        message || "서버가 JSON이 아닌 응답을 보냈습니다. Render 로그를 확인해 주세요.",
-      );
-    }
-  }
-
-  function resizeImageBlob(blob, maxSize = 1280) {
-    return new Promise((resolve) => {
-      const image = new Image();
-      const url = URL.createObjectURL(blob);
-      image.onload = () => {
-        URL.revokeObjectURL(url);
-        const scale = Math.min(1, maxSize / Math.max(image.width, image.height));
-        if (scale >= 1) {
-          resolve(blob);
-          return;
-        }
-        const canvas = document.createElement("canvas");
-        canvas.width = Math.round(image.width * scale);
-        canvas.height = Math.round(image.height * scale);
-        const context = canvas.getContext("2d");
-        context.drawImage(image, 0, 0, canvas.width, canvas.height);
-        canvas.toBlob((resized) => resolve(resized || blob), "image/jpeg", 0.88);
-      };
-      image.onerror = () => {
-        URL.revokeObjectURL(url);
-        resolve(blob);
-      };
-      image.src = url;
-    });
   }
 
   async function togglePillDetail(prediction) {
@@ -834,6 +764,21 @@ await video.play().catch(() => {});
     await completeDose(schedule);
   }
 
+  useEffect(() => {
+    if (!data.medicines.length) {
+      setAiMedicine(null);
+      return;
+    }
+
+    const random =
+      data.medicines[Math.floor(Math.random() * data.medicines.length)];
+
+    setAiMedicine({
+      name: random.item_name,
+      effect: random.efcy_qesitm || "등록된 효능 정보가 없습니다.",
+    });
+  }, [data.medicines]);
+
   const title = {
     dashboard: "오늘 복약 현황",
     auth: "로그인",
@@ -860,6 +805,72 @@ await video.play().catch(() => {});
   const aiTip = getAiTip(data.medicines);
   const weeklyBars = getWeeklyAdherence(data.records, todayTotal);
   const [takenMedicines, setTakenMedicines] = useState([]);
+  const [aiMedicine, setAiMedicine] = useState(null);
+  const [notifications, setNotifications] = useState([]);
+  useEffect(() => {
+    const timer = setInterval(() => {
+      checkMedicineAlarm();
+    }, 60000);
+
+    checkMedicineAlarm();
+
+    return () => clearInterval(timer);
+  }, [data.schedules]);
+  function checkMedicineAlarm() {
+    const now = new Date();
+
+    const current =
+      now.getHours().toString().padStart(2, "0") +
+      ":" +
+      now.getMinutes().toString().padStart(2, "0");
+
+    data.schedules.forEach((schedule) => {
+      if (schedule.time === current) {
+        setNotifications((prev) => {
+          const exists = prev.some(
+            (n) =>
+              n.scheduleId === schedule.id && n.date === now.toDateString(),
+          );
+
+          if (exists) return prev;
+
+          return [
+            {
+              id: Date.now(),
+              scheduleId: schedule.id,
+              title: `${schedule.item_name} 복용 시간입니다.`,
+              time: current,
+              date: now.toDateString(),
+              read: false,
+              expired: false,
+            },
+            ...prev,
+          ];
+        });
+
+        alert(`${schedule.item_name} 복용 시간입니다!`);
+      }
+    });
+  }
+  useEffect(() => {
+    setNotifications((prev) =>
+      prev.map((n) => {
+        const now = new Date();
+
+        const current = now.getHours() * 60 + now.getMinutes();
+
+        const [h, m] = n.time.split(":");
+
+        const target = Number(h) * 60 + Number(m);
+
+        return {
+          ...n,
+          expired: current > target,
+        };
+      }),
+    );
+  }, [data.schedules]);
+  const [showNotification, setShowNotification] = useState(false);
 
   return (
     <div
@@ -868,15 +879,71 @@ await video.play().catch(() => {});
     >
       <aside className="side" onClick={(e) => e.stopPropagation()}>
         <nav>
-          <NavButton active={view === "dashboard"} icon={<Home />} onClick={() => selectView("dashboard")}>홈</NavButton>
-          <NavButton active={view === "auth"} icon={<UserRound />} onClick={() => selectView("auth")}>로그인</NavButton>
-          <NavButton active={view === "medicines"} icon={<Pill />} onClick={() => selectView("medicines")}>약 관리</NavButton>
-          <NavButton active={view === "records"} icon={<ClipboardCheck />} onClick={() => selectView("records")}>복용 기록</NavButton>
-          <NavButton active={view === "guardian"} icon={<UserRoundCheck />} onClick={() => selectView("guardian")}>보호자</NavButton>
-          {guardianSession && <NavButton active={view === "guardianManage"} icon={<ShieldCheck />} onClick={() => selectView("guardianManage")}>관리</NavButton>}
-          <NavButton active={view === "ocr"} icon={<Camera />} onClick={() => selectView("ocr")}>OCR 등록</NavButton>
-          <NavButton active={view === "recognize"} icon={<ScanSearch />} onClick={() => selectView("recognize")}>AI 인식</NavButton>
-          <NavButton active={view === "report"} icon={<BarChart3 />} onClick={() => selectView("report")}>리포트</NavButton>
+          <NavButton
+            active={view === "dashboard"}
+            icon={<Home />}
+            onClick={() => selectView("dashboard")}
+          >
+            홈
+          </NavButton>
+          <NavButton
+            active={view === "records"}
+            icon={<ClipboardCheck />}
+            onClick={() => selectView("records")}
+          >
+            복약 기록
+          </NavButton>
+          <NavButton
+            active={view === "medicines"}
+            icon={<Pill />}
+            onClick={() => selectView("medicines")}
+          >
+            약 목록
+          </NavButton>
+          <NavButton
+            active={view === "report"}
+            icon={<BarChart3 />}
+            onClick={() => selectView("report")}
+          >
+            리포트
+          </NavButton>
+          <NavButton
+            active={view === "guardian"}
+            icon={<UserRoundCheck />}
+            onClick={() => selectView("guardian")}
+          >
+            보호자 연동
+          </NavButton>
+          {guardianSession && (
+            <NavButton
+              active={view === "guardianManage"}
+              icon={<ShieldCheck />}
+              onClick={() => selectView("guardianManage")}
+            >
+              보호자 관리
+            </NavButton>
+          )}
+          <NavButton
+            active={view === "ocr"}
+            icon={<Camera />}
+            onClick={() => selectView("ocr")}
+          >
+            약 등록
+          </NavButton>
+          <NavButton
+            active={view === "recognize"}
+            icon={<ScanSearch />}
+            onClick={() => selectView("recognize")}
+          >
+            AI 인식
+          </NavButton>
+          <NavButton
+            active={view === "auth"}
+            icon={<Settings />}
+            onClick={() => selectView("auth")}
+          >
+            설정
+          </NavButton>
         </nav>
         <div className="side-foot">
           <Sparkles />
@@ -908,11 +975,34 @@ await video.play().catch(() => {});
           <div className="top-right">
             <button
               className="bell-btn"
-              onClick={syncFromDatabase}
-              aria-label="알림"
+              onClick={() => setShowNotification(!showNotification)}
             >
               <Bell />
             </button>
+            {showNotification && (
+              <div className="notification-panel">
+                <h4>알림</h4>
+
+                {notifications.length === 0 ? (
+                  <p>알림이 없습니다.</p>
+                ) : (
+                  notifications.map((n) => (
+                    <div
+                      key={n.id}
+                      className={`notification-item ${
+                        n.expired ? "expired" : ""
+                      }`}
+                    >
+                      <strong>{n.title}</strong>
+
+                      <small>{n.time}</small>
+
+                      {n.expired && <span>지난 알림</span>}
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
             <button
               className="user-chip"
               onClick={() =>
@@ -1037,16 +1127,32 @@ await video.play().catch(() => {});
 
               <article className="card ai-card">
                 <div className="card-head">
-                  <Bot />
-                  AI 약 정보
+                  <Bot />약 정보
                 </div>
                 <div className="ai-card-body">
                   <div>
-                    <p>{aiTip}</p>
-                    <button className="ai-link">
-                      자세히 보기
-                      <ChevronRight />
-                    </button>
+                    <div>
+                      {aiMedicine ? (
+                        <>
+                          <h4>{aiMedicine.item_name}</h4>
+
+                          <p>
+                            {aiMedicine.efcy_qesitm ||
+                              "효능 정보가 없습니다. 자세히 보기를 눌러 조회하세요."}
+                          </p>
+                        </>
+                      ) : (
+                        <p>등록된 약이 없습니다.</p>
+                      )}
+
+                      <button
+                        className="ai-link"
+                        onClick={() => selectView("medicines")}
+                      >
+                        자세히 보기
+                        <ChevronRight />
+                      </button>
+                    </div>
                   </div>
                   <div className="robot">
                     <Bot />
@@ -1148,52 +1254,196 @@ await video.play().catch(() => {});
         )}
 
         {view === "auth" && (
-          <div className="grid two">
-            <Panel eyebrow="회원가입" title="이름 / 아이디 / 비밀번호">
-              <form className="form" onSubmit={handleSignUp}>
-                <label>이름<input value={authForm.name} onChange={(e) => setAuthForm({ ...authForm, name: e.target.value })} required /></label>
-                <label>아이디<input value={authForm.loginId} onChange={(e) => setAuthForm({ ...authForm, loginId: e.target.value })} required /></label>
-                <label>비밀번호<input type="password" minLength={6} value={authForm.password} onChange={(e) => setAuthForm({ ...authForm, password: e.target.value })} required /></label>
-                <label>전화번호<input value={authForm.phone} onChange={(e) => setAuthForm({ ...authForm, phone: e.target.value })} /></label>
-                <button className="primary"><UserPlus />가입하기</button>
-              </form>
-            </Panel>
-            <Panel
-              eyebrow="로그인"
-              title={authMode === "user" ? "일반 로그인" : "보호자 로그인"}
-              action={authMode === "user" ? <button className="ghost" onClick={handleLogout}><LogOut />로그아웃</button> : <button className="ghost" onClick={handleGuardianLogout}><LogOut />로그아웃</button>}
-            >
-              <div className="auth-tabs">
-                <button className={authMode === "user" ? "active" : ""} type="button" onClick={() => setAuthMode("user")}>일반 로그인</button>
-                <button className={authMode === "guardian" ? "active" : ""} type="button" onClick={() => setAuthMode("guardian")}>보호자 로그인</button>
-              </div>
-
-              {authMode === "user" ? (
-                <>
-                  <form className="form" onSubmit={handleLogin}>
-                    <label>아이디<input value={loginForm.loginId} onChange={(e) => setLoginForm({ ...loginForm, loginId: e.target.value })} required /></label>
-                    <label>비밀번호<input type="password" value={loginForm.password} onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })} required /></label>
-                    <button className="primary"><LogIn />로그인</button>
-                  </form>
-                  <div className="notice">{data.profile ? `${data.profile.name} / 아이디: ${data.profile.login_id}` : "아직 로그인하지 않았습니다."}</div>
-                </>
+          <Panel
+            eyebrow="로그인"
+            title={authMode === "user" ? "일반 로그인" : "보호자 로그인"}
+            action={
+              authMode === "user" ? (
+                <button className="ghost" onClick={handleLogout}>
+                  <LogOut />
+                  로그아웃
+                </button>
               ) : (
-                <>
-                  <form className="form" onSubmit={handleGuardianLogin}>
-                    <label>보호자 이름<input value={guardianLoginForm.name} onChange={(e) => setGuardianLoginForm({ ...guardianLoginForm, name: e.target.value })} required /></label>
-                    <label>보호자 연락처<input value={guardianLoginForm.phone} onChange={(e) => setGuardianLoginForm({ ...guardianLoginForm, phone: e.target.value })} placeholder="01012345678" required /></label>
-                    <button className="primary"><ShieldCheck />보호자 로그인</button>
-                  </form>
-                  <div className="notice">{guardianSession ? `${guardianLoginForm.name} 보호자 / 관리 대상 ${guardianSession.wards.length}명` : guardianStatus || "환자가 등록한 보호자 이름과 연락처로 로그인합니다."}</div>
-                </>
-              )}
-            </Panel>
-          </div>
+                <button className="ghost" onClick={handleGuardianLogout}>
+                  <LogOut />
+                  로그아웃
+                </button>
+              )
+            }
+          >
+            <div className="auth-tabs">
+              <button
+                className={authMode === "user" ? "active" : ""}
+                type="button"
+                onClick={() => setAuthMode("user")}
+              >
+                일반 로그인
+              </button>
+
+              <button
+                className={authMode === "guardian" ? "active" : ""}
+                type="button"
+                onClick={() => setAuthMode("guardian")}
+              >
+                보호자 로그인
+              </button>
+            </div>
+
+            {authMode === "user" ? (
+              <>
+                <form className="form" onSubmit={handleLogin}>
+                  <label>
+                    아이디
+                    <input
+                      value={loginForm.loginId}
+                      onChange={(e) =>
+                        setLoginForm({
+                          ...loginForm,
+                          loginId: e.target.value,
+                        })
+                      }
+                      required
+                    />
+                  </label>
+
+                  <label>
+                    비밀번호
+                    <input
+                      type="password"
+                      value={loginForm.password}
+                      onChange={(e) =>
+                        setLoginForm({
+                          ...loginForm,
+                          password: e.target.value,
+                        })
+                      }
+                      required
+                    />
+                  </label>
+
+                  <button className="primary">
+                    <LogIn />
+                    로그인
+                  </button>
+
+                  <button
+                    type="button"
+                    className="ghost"
+                    onClick={() => setView("signup")}
+                  >
+                    <UserPlus />
+                    회원가입
+                  </button>
+                </form>
+
+                <div className="notice">
+                  {data.profile
+                    ? `${data.profile.name} / 아이디 : ${data.profile.login_id}`
+                    : "아직 로그인하지 않았습니다."}
+                </div>
+              </>
+            ) : (
+              <>
+                <form className="form" onSubmit={handleGuardianLogin}>
+                  <label>
+                    보호자 이름
+                    <input
+                      value={guardianLoginForm.name}
+                      onChange={(e) =>
+                        setGuardianLoginForm({
+                          ...guardianLoginForm,
+                          name: e.target.value,
+                        })
+                      }
+                      required
+                    />
+                  </label>
+
+                  <label>
+                    보호자 연락처
+                    <input
+                      value={guardianLoginForm.phone}
+                      onChange={(e) =>
+                        setGuardianLoginForm({
+                          ...guardianLoginForm,
+                          phone: e.target.value,
+                        })
+                      }
+                      placeholder="01012345678"
+                      required
+                    />
+                  </label>
+
+                  <button className="primary">
+                    <ShieldCheck />
+                    보호자 로그인
+                  </button>
+                </form>
+
+                <div className="notice">
+                  {guardianSession
+                    ? `${guardianLoginForm.name} 보호자 / 관리 대상 ${guardianSession.wards.length}명`
+                    : guardianStatus ||
+                      "환자가 등록한 보호자 이름과 연락처로 로그인합니다."}
+                </div>
+              </>
+            )}
+          </Panel>
+        )}
+
+        {view === "signup" && (
+          <Panel eyebrow="회원가입" title="새 계정 만들기">
+            <form className="form" onSubmit={handleSignUp}>
+              <label>
+                아이디
+                <input
+                  value={authForm.loginId}
+                  onChange={(e) =>
+                    setAuthForm({
+                      ...authForm,
+                      loginId: e.target.value,
+                    })
+                  }
+                  required
+                />
+              </label>
+
+              <label>
+                비밀번호
+                <input
+                  type="password"
+                  minLength={6}
+                  value={authForm.password}
+                  onChange={(e) =>
+                    setAuthForm({
+                      ...authForm,
+                      password: e.target.value,
+                    })
+                  }
+                  required
+                />
+              </label>
+
+              <button className="primary">
+                <UserPlus />
+                가입하기
+              </button>
+
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => setView("auth")}
+              >
+                <LogIn />
+                로그인으로 돌아가기
+              </button>
+            </form>
+          </Panel>
         )}
 
         {view === "medicines" && (
           <div className="grid two">
-            <Panel eyebrow="약 등록">
+            <Panel eyebrow="약 등록" title="약 조회">
               <form className="form" onSubmit={saveMedicine}>
                 <label>
                   약 이름
@@ -1217,7 +1467,7 @@ await video.play().catch(() => {});
                   e약은요 효능 조회
                 </button>
                 <label>
-                  효능 efcyQesitm
+                  효능
                   <textarea
                     value={medicineForm.efcyQesitm}
                     onChange={(e) =>
@@ -1271,7 +1521,7 @@ await video.play().catch(() => {});
                 </button>
               </form>
             </Panel>
-            <Panel eyebrow="약 목록" title="Supabase medicines">
+            <Panel eyebrow="약 목록" title="medicines">
               <List
                 empty="등록된 약이 없습니다."
                 items={data.medicines}
@@ -1328,7 +1578,7 @@ await video.play().catch(() => {});
 
         {view === "guardian" && (
           <div className="grid two">
-            <Panel eyebrow="보호자 연동">
+            <Panel eyebrow="보호자 연동" title="보호자 등록">
               <form className="form" onSubmit={saveGuardian}>
                 <label>
                   보호자 이름
@@ -1513,10 +1763,7 @@ await video.play().catch(() => {});
         )}
 
         {view === "ocr" && (
-          <Panel
-            eyebrow="AI 기반 간편 등록"
-            title="Tesseract OCR 결과를 DB에 저장"
-          >
+          <Panel eyebrow="AI 기반 간편 등록" title="처방전 스캔">
             <div className="ocr-actions">
               <label className="secondary file-btn">
                 <Camera />
@@ -1533,7 +1780,7 @@ await video.play().catch(() => {});
               </button>
               <button className="primary" onClick={saveOcrResult}>
                 <Database />
-                OCR 결과 저장
+                결과 저장
               </button>
             </div>
             <div className="ocr-grid">
@@ -1593,10 +1840,7 @@ await video.play().catch(() => {});
 
         {view === "recognize" && (
           <div className="grid two">
-            <Panel
-              eyebrow="U2-Net + PyTorch"
-              title="웹캠 촬영 또는 이미지 업로드"
-            >
+            <Panel eyebrow="알약 인식" title="웹캠 촬영 또는 이미지 업로드">
               <div className="pill-camera">
                 <div className="pill-preview">
                   {pillPreviewUrl ? (
@@ -1738,23 +1982,120 @@ await video.play().catch(() => {});
         )}
 
         {view === "report" && (
-          <div className="grid two">
-            <Panel eyebrow="복약 리포트" title="이번 주 순응도">
-              <div className="report-score">
-                {calculateAdherence(data.records, data.schedules)}%
+          <section className="report-page">
+            {/* 순응도 */}
+            <div className="report-top">
+              <div className="report-score-card">
+                <h3>이번 주 복약 순응도</h3>
+
+                <div className="report-score-big">
+                  {calculateAdherence(data.records, data.schedules)}%
+                </div>
+
+                <div className="progress">
+                  <div
+                    className="progress-fill"
+                    style={{
+                      width: `${calculateAdherence(data.records, data.schedules)}%`,
+                    }}
+                  />
+                </div>
               </div>
-              <p className="muted">
-                복용 기록과 오늘 일정 기준으로 계산한 간단 리포트입니다.
-              </p>
-            </Panel>
-            <Panel eyebrow="AI 코멘트" title="습관 분석">
-              <div className="notice">
-                {data.records.length
-                  ? "복용 기록이 쌓이고 있습니다. 저녁 시간대 누락이 생기면 보호자 알림 시간을 짧게 설정해 보세요."
-                  : "아직 복용 기록이 없습니다. 복용 완료 버튼을 눌러 기록을 시작하세요."}
+
+              <div className="report-ai-card">
+                <Bot size={26} />
+                <h3>AI 분석</h3>
+
+                <p>
+                  {data.records.length
+                    ? "이번 주 복약률이 양호합니다. 저녁 시간대 복용이 조금 부족합니다."
+                    : "복약 기록이 아직 없습니다."}
+                </p>
+              </div>
+            </div>
+
+            {/* 통계 */}
+            <div className="report-stat-grid">
+              <div className="report-stat">
+                <Pill />
+                <h2>{data.medicines.length}</h2>
+                <p>등록된 약</p>
+              </div>
+
+              <div className="report-stat">
+                <Check />
+                <h2>{data.records.length}</h2>
+                <p>복용 완료</p>
+              </div>
+
+              <div className="report-stat">
+                <AlarmClock />
+                <h2>
+                  {Math.max(0, data.schedules.length - data.records.length)}
+                </h2>
+                <p>미복용</p>
+              </div>
+
+              <div className="report-stat">
+                <UserRoundCheck />
+                <h2>{data.guardians.length}</h2>
+                <p>보호자</p>
+              </div>
+            </div>
+
+            {/* 이번 주 그래프 */}
+
+            <Panel eyebrow="이번 주" title="요일별 복약률">
+              <div className="bar-chart">
+                {weeklyBars.map((bar) => (
+                  <div className="bar-col" key={bar.label}>
+                    <div
+                      className="bar"
+                      style={{
+                        height: `${Math.max(bar.pct, 5)}%`,
+                        background:
+                          bar.pct >= 80
+                            ? "#2bb673"
+                            : bar.pct >= 50
+                              ? "#f6b94d"
+                              : "#e0524f",
+                      }}
+                    />
+                    <span>{bar.label}</span>
+                  </div>
+                ))}
               </div>
             </Panel>
-          </div>
+
+            {/* 최근 복용 기록 */}
+
+            <Panel
+              eyebrow="최근 기록"
+              title="최근 복용 내역"
+              action={
+                <button className="secondary" onClick={exportCsv}>
+                  <Download />
+                  CSV
+                </button>
+              }
+            >
+              <List
+                empty="복용 기록이 없습니다."
+                items={data.records.slice(0, 5)}
+                render={(record) => (
+                  <div className="item" key={record.id}>
+                    <div>
+                      <h4>{record.medicines?.item_name}</h4>
+
+                      <p>{formatDateTime(record.taken_at)}</p>
+                    </div>
+
+                    <span className="label">완료</span>
+                  </div>
+                )}
+              />
+            </Panel>
+          </section>
         )}
 
         {view === "doseCheck" && (

@@ -763,8 +763,13 @@ main {
 }
 
 .schedule-list {
-  display: grid;
-  gap: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+
+  max-height: 170px;
+  overflow-y: auto;
+  padding-right: 6px;
 }
 
 .sched-row {
@@ -1200,7 +1205,6 @@ main {
   line-height: 1.5;
 }
 
-
 .pill-camera {
   display: grid;
   gap: 12px;
@@ -1579,4 +1583,139 @@ main {
 
 .dose-footer button {
   min-width: 220px;
+}
+
+.report-page {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.report-top {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 18px;
+}
+
+.report-score-card,
+.report-ai-card {
+  background: white;
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: var(--shadow);
+}
+
+.report-score-big {
+  font-size: 70px;
+
+  font-weight: 800;
+
+  color: var(--primary);
+
+  margin: 20px 0;
+}
+
+.progress {
+  height: 14px;
+
+  border-radius: 99px;
+
+  background: #edf2fa;
+
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+
+  background: linear-gradient(90deg, #2f6bff, #5e8bff);
+
+  transition: 0.3s;
+}
+
+.report-stat-grid {
+  display: grid;
+
+  grid-template-columns: repeat(4, 1fr);
+
+  gap: 18px;
+}
+
+.report-stat {
+  background: white;
+
+  border-radius: 16px;
+
+  padding: 24px;
+
+  text-align: center;
+
+  box-shadow: var(--shadow);
+}
+
+.report-stat svg {
+  color: var(--primary);
+
+  width: 34px;
+
+  height: 34px;
+}
+
+.report-stat h2 {
+  margin: 15px 0 5px;
+
+  font-size: 34px;
+}
+
+.report-stat p {
+  color: gray;
+
+  margin: 0;
+}
+
+@media (max-width: 900px) {
+  .report-top {
+    grid-template-columns: 1fr;
+  }
+
+  .report-stat-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .report-stat-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.notification-panel {
+  position: absolute;
+  top: 55px;
+  right: 0;
+  width: 340px;
+  max-height: 420px;
+  overflow-y: auto;
+  background: white;
+  border-radius: 14px;
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.15);
+  border: 1px solid #ddd;
+  z-index: 999;
+}
+
+.notification-item {
+  padding: 14px;
+  border-bottom: 1px solid #eee;
+}
+
+.notification-item.expired {
+  opacity: 0.55;
+}
+
+.notification-item span {
+  display: inline-block;
+  margin-top: 6px;
+  color: #f44336;
+  font-size: 12px;
+  font-weight: 700;
 }
