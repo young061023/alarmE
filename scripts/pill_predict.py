@@ -4,6 +4,7 @@ import math
 import os
 import sys
 import unicodedata
+import urllib.request
 from pathlib import Path
 
 import cv2
@@ -30,7 +31,7 @@ def main():
 
     image_path = Path(sys.argv[1])
     app_root = Path(__file__).resolve().parents[1]
-    model_path = Path(os.getenv("PILL_MODEL_PATH", "/Users/young/Desktop/wak/best_pill_model.pt"))
+    model_path = resolve_model_path(app_root)
     cache_dir = Path(os.getenv("PILL_CACHE_DIR", app_root / "pill_cache"))
     device = os.getenv("PILL_DEVICE", "cpu")
 
@@ -99,6 +100,26 @@ def main():
         })
 
     print(json.dumps({"predictions": predictions}, ensure_ascii=False))
+
+
+def resolve_model_path(app_root):
+    model_path = Path(os.getenv("PILL_MODEL_PATH", app_root / "best_pill_model.pt"))
+    if model_path.exists():
+        return model_path
+
+    model_url = os.getenv("PILL_MODEL_URL", "").strip()
+    if not model_url:
+        raise FileNotFoundError(
+            f"모델 파일을 찾지 못했습니다: {model_path}. "
+            "Render에서는 PILL_MODEL_URL 또는 Render에서 접근 가능한 PILL_MODEL_PATH를 설정하세요."
+        )
+
+    download_dir = Path(os.getenv("PILL_MODEL_DOWNLOAD_DIR", "/tmp/pill-models"))
+    download_dir.mkdir(parents=True, exist_ok=True)
+    target = download_dir / "best_pill_model.pt"
+    if not target.exists() or target.stat().st_size == 0:
+        urllib.request.urlretrieve(model_url, target)
+    return target
 
 
 def build_model(num_classes, feature_dim, device):

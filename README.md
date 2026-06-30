@@ -24,7 +24,7 @@ Build command: npm install && python3 -m pip install -r requirements-pill.txt &&
 Start command: npm run start
 ```
 
-AI 약 인식을 Render에서 함께 쓰려면 Python 패키지도 설치되어야 합니다. OpenCV는 사용자 기기에 설치하는 것이 아니라 Render 서버에 `opencv-python-headless`로 설치됩니다.
+AI 약 인식을 Render에서 함께 쓰려면 Python 패키지도 설치되어야 합니다. OpenCV는 사용자 기기에 설치하는 것이 아니라 Render 서버에 `opencv-python-headless`로 설치됩니다. 모델 파일을 GitHub에 직접 올리지 않을 경우 Render 환경변수에 `PILL_MODEL_URL`을 넣으면 서버가 `/tmp/pill-models/best_pill_model.pt`로 내려받아 사용합니다.
 
 개발 중에는:
 
@@ -43,7 +43,8 @@ SUPABASE_SERVICE_ROLE_KEY=Supabase service role key (보호자 관리 서버 조
 EDRUG_SERVICE_KEY=e약은요 일반 인증키 Encoding
 GEMINI_API_KEY=Google Gemini API key
 GEMINI_MODEL=gemini-2.5-flash
-PILL_MODEL_PATH=/Users/young/Desktop/wak/best_pill_model.pt
+PILL_MODEL_PATH=/opt/render/project/src/best_pill_model.pt
+PILL_MODEL_URL=모델 파일 다운로드 URL
 PILL_CACHE_DIR=/Users/young/Documents/GitHub/alarmE/pill_cache
 PILL_DEVICE=cpu
 REMBG_MODEL=isnet-general-use

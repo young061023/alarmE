@@ -35,10 +35,7 @@ export async function POST(request) {
 
 function runPython(imagePath) {
   const python = process.env.PILL_PYTHON || "python3";
-  const env = {
-    ...process.env,
-    PILL_MODEL_PATH: process.env.PILL_MODEL_PATH || "/Users/young/Desktop/wak/best_pill_model.pt"
-  };
+  const env = { ...process.env };
 
   return new Promise((resolve, reject) => {
     const child = spawn(python, [SCRIPT_PATH, imagePath], { env });
