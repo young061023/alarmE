@@ -560,13 +560,14 @@ export default function HomePage() {
     setPillLoading(true);
     setPillStatus("누끼 제거 후 모델 추론 중입니다.");
     try {
+      const uploadBlob = await resizeImageBlob(pillImageBlob);
       const formData = new FormData();
-      formData.append("image", pillImageBlob, "pill.jpg");
+      formData.append("image", uploadBlob, "pill.jpg");
       const response = await fetch("/api/pill-recognition", {
         method: "POST",
         body: formData
       });
-      const result = await response.json();
+      const result = await readJsonResponse(response);
       if (!response.ok) throw new Error(result.error || "AI 인식 실패");
       setPillPredictions(result.predictions || []);
       setPillDetails({});
@@ -594,6 +595,48 @@ export default function HomePage() {
       pillVideoRef.current.srcObject = null;
     }
     setPillCameraOn(false);
+  }
+
+  async function readJsonResponse(response) {
+    const text = await response.text();
+    try {
+      return text ? JSON.parse(text) : {};
+    } catch {
+      const message = text
+        .replace(/<script[\s\S]*?<\/script>/gi, "")
+        .replace(/<style[\s\S]*?<\/style>/gi, "")
+        .replace(/<[^>]+>/g, " ")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 180);
+      throw new Error(message || "서버가 JSON이 아닌 응답을 보냈습니다. Render 로그를 확인해 주세요.");
+    }
+  }
+
+  function resizeImageBlob(blob, maxSize = 1280) {
+    return new Promise((resolve) => {
+      const image = new Image();
+      const url = URL.createObjectURL(blob);
+      image.onload = () => {
+        URL.revokeObjectURL(url);
+        const scale = Math.min(1, maxSize / Math.max(image.width, image.height));
+        if (scale >= 1) {
+          resolve(blob);
+          return;
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(image.width * scale);
+        canvas.height = Math.round(image.height * scale);
+        const context = canvas.getContext("2d");
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob((resized) => resolve(resized || blob), "image/jpeg", 0.88);
+      };
+      image.onerror = () => {
+        URL.revokeObjectURL(url);
+        resolve(blob);
+      };
+      image.src = url;
+    });
   }
 
   async function togglePillDetail(prediction) {
