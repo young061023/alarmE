@@ -205,15 +205,18 @@ def build_model(num_classes, feature_dim, device):
 
 
 def preprocess_one_image(image_path, feature_mean, feature_scale):
-    from rembg import new_session, remove
-
     img = Image.open(image_path)
     img = ImageOps.exif_transpose(img).convert("RGBA")
-    model_name = os.getenv("REMBG_MODEL", "isnet-general-use")
-    cutout = remove(img, session=new_session(model_name)).convert("RGBA")
+    use_rembg = os.getenv("PILL_USE_REMBG", "").lower() in {"1", "true", "yes"}
+    if use_rembg:
+        from rembg import new_session, remove
 
-    if cutout.size != img.size:
-        cutout = cutout.resize(img.size, Image.Resampling.LANCZOS)
+        model_name = os.getenv("REMBG_MODEL", "isnet-general-use")
+        cutout = remove(img, session=new_session(model_name)).convert("RGBA")
+        if cutout.size != img.size:
+            cutout = cutout.resize(img.size, Image.Resampling.LANCZOS)
+    else:
+        cutout = opencv_cutout(img)
 
     alpha = cutout.getchannel("A")
     rgb_for_features = pil_to_rgb_np(cutout)
@@ -234,6 +237,37 @@ def preprocess_one_image(image_path, feature_mean, feature_scale):
     image_tensor = prepare_image_tensor(rgb)
 
     return image_tensor, feat, cutout, alpha
+
+
+def opencv_cutout(img):
+    rgb = np.array(img.convert("RGB"))
+    lab = cv2.cvtColor(rgb, cv2.COLOR_RGB2LAB)
+    _, _, b = cv2.split(lab)
+    gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
+
+    # Pills are usually the largest object with a color/brightness difference
+    # from the desk or paper background. This keeps memory low on Render.
+    saturation_like = cv2.absdiff(b, cv2.GaussianBlur(b, (0, 0), 25))
+    light_detail = cv2.absdiff(gray, cv2.GaussianBlur(gray, (0, 0), 25))
+    score = cv2.addWeighted(saturation_like, 0.7, light_detail, 0.3, 0)
+    score = cv2.GaussianBlur(score, (5, 5), 0)
+    _, mask = cv2.threshold(score, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+
+    kernel = np.ones((9, 9), np.uint8)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=2)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, np.ones((5, 5), np.uint8), iterations=1)
+
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    clean = np.zeros(mask.shape, dtype=np.uint8)
+    if contours:
+        contour = max(contours, key=cv2.contourArea)
+        cv2.drawContours(clean, [contour], -1, 255, thickness=cv2.FILLED)
+    else:
+        clean[:] = 255
+
+    clean = cv2.GaussianBlur(clean, (9, 9), 0)
+    rgba = np.dstack([rgb, clean])
+    return Image.fromarray(rgba, "RGBA")
 
 
 def prepare_image_tensor(rgb):

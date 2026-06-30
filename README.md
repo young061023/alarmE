@@ -24,7 +24,7 @@ Build command: npm install && python3 -m pip install -r requirements-pill.txt &&
 Start command: npm run start
 ```
 
-AI 약 인식을 Render에서 함께 쓰려면 Python 패키지도 설치되어야 합니다. OpenCV는 사용자 기기에 설치하는 것이 아니라 Render 서버에 `opencv-python-headless`로 설치됩니다. 모델 파일을 GitHub에 직접 올리지 않을 경우 Render 환경변수에 `PILL_MODEL_URL`을 넣으면 서버가 `/tmp/pill-models/best_pill_model.pt`로 내려받아 사용합니다. Google Drive를 쓸 때는 파일을 "링크가 있는 모든 사용자 보기 가능"으로 공유하고 `https://drive.google.com/file/d/.../view` 또는 `https://drive.google.com/uc?export=download&id=...` 형태의 링크를 넣으세요.
+AI 약 인식을 Render에서 함께 쓰려면 Python 패키지도 설치되어야 합니다. OpenCV는 사용자 기기에 설치하는 것이 아니라 Render 서버에 `opencv-python-headless`로 설치됩니다. Render 메모리 사용을 줄이기 위해 기본 누끼는 OpenCV 마스크로 처리합니다. 모델 파일을 GitHub에 직접 올리지 않을 경우 Render 환경변수에 `PILL_MODEL_URL`을 넣으면 서버가 `/tmp/pill-models/best_pill_model.pt`로 내려받아 사용합니다. Google Drive를 쓸 때는 파일을 "링크가 있는 모든 사용자 보기 가능"으로 공유하고 `https://drive.google.com/file/d/.../view` 또는 `https://drive.google.com/uc?export=download&id=...` 형태의 링크를 넣으세요.
 
 개발 중에는:
 
@@ -47,7 +47,7 @@ PILL_MODEL_PATH=/opt/render/project/src/best_pill_model.pt
 PILL_MODEL_URL=모델 파일 다운로드 URL
 PILL_CACHE_DIR=/Users/young/Documents/GitHub/alarmE/pill_cache
 PILL_DEVICE=cpu
-REMBG_MODEL=isnet-general-use
+PILL_USE_REMBG=false
 ```
 
 `EDRUG_SERVICE_KEY`는 서버 API route에서만 사용됩니다. 브라우저에 직접 노출하지 않습니다.
