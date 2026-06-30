@@ -4,6 +4,7 @@ import math
 import os
 import sys
 import unicodedata
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -118,8 +119,56 @@ def resolve_model_path(app_root):
     download_dir.mkdir(parents=True, exist_ok=True)
     target = download_dir / "best_pill_model.pt"
     if not target.exists() or target.stat().st_size == 0:
-        urllib.request.urlretrieve(model_url, target)
+        download_model(model_url, target)
+    if looks_like_html(target):
+        target.unlink(missing_ok=True)
+        raise RuntimeError(
+            "모델 URL에서 실제 .pt 파일이 아니라 HTML 페이지를 받았습니다. "
+            "Google Drive 링크는 '링크가 있는 모든 사용자 보기 가능'으로 공유하고, "
+            "PILL_MODEL_URL에는 직접 다운로드 가능한 링크를 넣어야 합니다."
+        )
     return target
+
+
+def download_model(model_url, target):
+    if "drive.google.com" in model_url:
+        try:
+            import gdown
+
+            gdown.download(model_url, str(target), quiet=True, fuzzy=True)
+            return
+        except Exception:
+            drive_id = extract_google_drive_id(model_url)
+            if drive_id:
+                import gdown
+
+                gdown.download(id=drive_id, output=str(target), quiet=True)
+                return
+
+    urllib.request.urlretrieve(model_url, target)
+
+
+def extract_google_drive_id(model_url):
+    parsed = urllib.parse.urlparse(model_url)
+    query_id = urllib.parse.parse_qs(parsed.query).get("id", [""])[0]
+    if query_id:
+        return query_id
+
+    parts = [part for part in parsed.path.split("/") if part]
+    if "d" in parts:
+        index = parts.index("d")
+        if index + 1 < len(parts):
+            return parts[index + 1]
+    return ""
+
+
+def looks_like_html(path):
+    try:
+        with path.open("rb") as file:
+            head = file.read(256).lstrip().lower()
+        return head.startswith(b"<") or b"<html" in head
+    except OSError:
+        return False
 
 
 def build_model(num_classes, feature_dim, device):
