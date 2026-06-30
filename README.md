@@ -20,9 +20,11 @@ http://localhost:3000
 배포 플랫폼에는 이렇게 넣으면 됩니다.
 
 ```txt
-Build command: npm run build
+Build command: npm install && python3 -m pip install -r requirements-pill.txt && npm run build
 Start command: npm run start
 ```
+
+AI 약 인식을 Render에서 함께 쓰려면 Python 패키지도 설치되어야 합니다. OpenCV는 사용자 기기에 설치하는 것이 아니라 Render 서버에 `opencv-python-headless`로 설치됩니다.
 
 개발 중에는:
 
