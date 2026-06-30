@@ -486,12 +486,34 @@ export default function HomePage() {
 
   async function startPillCamera() {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: "environment" } },
-        audio: false
-      });
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setPillStatus("이 브라우저에서는 카메라를 바로 열 수 없습니다. 사진 선택을 사용해 주세요.");
+        return;
+      }
+
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "environment" },
+          audio: false
+        });
+      } catch {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false
+        });
+      }
+
       pillStreamRef.current = stream;
-      pillVideoRef.current.srcObject = stream;
+      const video = pillVideoRef.current;
+      if (!video) {
+        stream.getTracks().forEach((track) => track.stop());
+        pillStreamRef.current = null;
+        setPillStatus("카메라 화면을 준비하지 못했습니다. 사진 선택으로 다시 시도해 주세요.");
+        return;
+      }
+      video.srcObject = stream;
+      await video.play().catch(() => {});
       setPillCameraOn(true);
       setPillPreviewUrl("");
       setPillImageBlob(null);
@@ -568,6 +590,9 @@ export default function HomePage() {
   function stopPillCamera() {
     pillStreamRef.current?.getTracks().forEach((track) => track.stop());
     pillStreamRef.current = null;
+    if (pillVideoRef.current) {
+      pillVideoRef.current.srcObject = null;
+    }
     setPillCameraOn(false);
   }
 

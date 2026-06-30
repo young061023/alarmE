@@ -22,7 +22,7 @@ export async function POST(request) {
     return NextResponse.json({ error: "빈 이미지입니다." }, { status: 400 });
   }
 
-  const imagePath = path.join(tmpdir(), `pill-${Date.now()}-${file.name || "camera.jpg"}`);
+  const imagePath = path.join(tmpdir(), `pill-${Date.now()}.jpg`);
   await writeFile(imagePath, bytes);
 
   try {
