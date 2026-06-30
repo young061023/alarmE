@@ -1,22 +1,30 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   BarChart3,
   Camera,
   Check,
+  ChevronDown,
+  ChevronUp,
   ClipboardCheck,
   Database,
   Download,
+  ImagePlus,
+  Loader2,
+  Sparkles,
   Home,
   LogIn,
   LogOut,
   Menu,
   Pill,
   RefreshCw,
+  RotateCcw,
   Save,
+  ScanSearch,
   Search,
   ShieldCheck,
+  Upload,
   UserPlus,
   UserRound,
   UserRoundCheck
@@ -34,6 +42,9 @@ const emptyState = {
 
 export default function HomePage() {
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
+  const pillVideoRef = useRef(null);
+  const pillCanvasRef = useRef(null);
+  const pillStreamRef = useRef(null);
   const [view, setView] = useState("dashboard");
   const [menuOpen, setMenuOpen] = useState(false);
   const [data, setData] = useState(emptyState);
@@ -42,6 +53,10 @@ export default function HomePage() {
   const [nextDose, setNextDose] = useState(null);
   const [authForm, setAuthForm] = useState({ name: "", loginId: "", password: "", phone: "" });
   const [loginForm, setLoginForm] = useState({ loginId: "", password: "" });
+  const [authMode, setAuthMode] = useState("user");
+  const [guardianLoginForm, setGuardianLoginForm] = useState({ name: "", phone: "" });
+  const [guardianSession, setGuardianSession] = useState(null);
+  const [guardianStatus, setGuardianStatus] = useState("");
   const [medicineForm, setMedicineForm] = useState({
     itemName: "",
     efcyQesitm: "",
@@ -58,6 +73,16 @@ export default function HomePage() {
   });
   const [ocrStatus, setOcrStatus] = useState("대기 중");
   const [previewUrl, setPreviewUrl] = useState("");
+  const [ocrMedicines, setOcrMedicines] = useState([]);
+  const [ocrAiLoading, setOcrAiLoading] = useState(false);
+  const [pillStatus, setPillStatus] = useState("카메라를 켜거나 사진을 선택해 주세요.");
+  const [pillPreviewUrl, setPillPreviewUrl] = useState("");
+  const [pillImageBlob, setPillImageBlob] = useState(null);
+  const [pillPredictions, setPillPredictions] = useState([]);
+  const [pillDetails, setPillDetails] = useState({});
+  const [pillDetailLoading, setPillDetailLoading] = useState("");
+  const [pillLoading, setPillLoading] = useState(false);
+  const [pillCameraOn, setPillCameraOn] = useState(false);
 
   useEffect(() => {
     syncFromDatabase();
@@ -149,6 +174,8 @@ export default function HomePage() {
         password: loginForm.password
       });
       throwIfError(error);
+      setGuardianSession(null);
+      setGuardianStatus("");
       notify("로그인되었습니다.");
       setLoginForm({ loginId: "", password: "" });
       await syncFromDatabase();
@@ -162,8 +189,74 @@ export default function HomePage() {
     if (!requireSupabase()) return;
     await supabase.auth.signOut();
     setData(emptyState);
+    setGuardianSession(null);
+    setGuardianStatus("");
     setConnection("Supabase 연결됨 · 로그인 필요");
     notify("로그아웃되었습니다.");
+  }
+
+  async function handleGuardianLogin(event) {
+    event.preventDefault();
+    if (!guardianLoginForm.name.trim() || !guardianLoginForm.phone.trim()) {
+      notify("보호자 이름과 연락처를 입력해 주세요.");
+      return;
+    }
+
+    setGuardianStatus("보호자 정보 확인 중...");
+    try {
+      const response = await fetch("/api/guardian-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(guardianLoginForm)
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || "보호자 로그인 실패");
+      }
+      setGuardianSession(result);
+      setGuardianStatus(`${result.wards.length}명 관리 대상 연동됨`);
+      setConnection(`${guardianLoginForm.name} 보호자님 · 관리 모드`);
+      setView("guardianManage");
+      notify("보호자 로그인되었습니다.");
+    } catch (error) {
+      setGuardianStatus("보호자 로그인 실패");
+      notify(error.message);
+    }
+  }
+
+  async function refreshGuardianManagement() {
+    if (!guardianLoginForm.name.trim() || !guardianLoginForm.phone.trim()) {
+      notify("보호자 로그인이 필요합니다.");
+      setView("auth");
+      setAuthMode("guardian");
+      return;
+    }
+
+    setGuardianStatus("관리 현황 새로고침 중...");
+    try {
+      const response = await fetch("/api/guardian-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(guardianLoginForm)
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || "관리 현황 조회 실패");
+      }
+      setGuardianSession(result);
+      setGuardianStatus(`${result.wards.length}명 관리 대상 동기화됨`);
+    } catch (error) {
+      setGuardianStatus("관리 현황 조회 실패");
+      notify(error.message);
+    }
+  }
+
+  function handleGuardianLogout() {
+    setGuardianSession(null);
+    setGuardianStatus("");
+    setGuardianLoginForm({ name: "", phone: "" });
+    setConnection(hasSupabaseConfig() ? "Supabase 연결 준비됨" : "anon key 필요");
+    notify("보호자 로그아웃되었습니다.");
   }
 
   async function lookupEDrug() {
@@ -292,12 +385,55 @@ export default function HomePage() {
           }
         }
       });
-      setData((current) => ({ ...current, ocrText: result.data.text.trim() }));
+      const text = result.data.text.trim();
+      setData((current) => ({ ...current, ocrText: text }));
       setOcrStatus("OCR 완료");
+      if (text) {
+        await analyzeOcrMedicines(text);
+      }
     } catch (error) {
       setOcrStatus("OCR 실패");
       notify(error.message);
     }
+  }
+
+  async function analyzeOcrMedicines(text = data.ocrText) {
+    if (!text.trim()) {
+      notify("분석할 OCR 결과가 없습니다.");
+      return;
+    }
+
+    setOcrAiLoading(true);
+    setOcrStatus("Gemini가 약명을 정리하고 e약은요를 조회 중...");
+
+    try {
+      const response = await fetch("/api/ocr-medicines", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ocrText: text })
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || "AI 약명 정리 실패");
+      }
+      setOcrMedicines(result.medicines || []);
+      setOcrStatus(result.medicines?.length ? "AI 약명 정리 완료" : "약명 후보를 찾지 못했습니다.");
+    } catch (error) {
+      setOcrStatus("AI 약명 정리 실패");
+      notify(error.message);
+    } finally {
+      setOcrAiLoading(false);
+    }
+  }
+
+  function applyOcrMedicine(medicine) {
+    setMedicineForm((current) => ({
+      ...current,
+      itemName: medicine.itemName || medicine.name || current.itemName,
+      efcyQesitm: medicine.efcyQesitm || current.efcyQesitm
+    }));
+    setView("medicines");
+    notify("약 관리 입력칸에 반영했습니다.");
   }
 
   async function saveOcrResult() {
@@ -307,7 +443,7 @@ export default function HomePage() {
       return;
     }
 
-    const parsedMedicineName = guessMedicineName(data.ocrText);
+    const parsedMedicineName = ocrMedicines[0]?.itemName || ocrMedicines[0]?.name || guessMedicineName(data.ocrText);
 
     try {
       const { data: userData } = await supabase.auth.getUser();
@@ -315,7 +451,7 @@ export default function HomePage() {
         user_id: userData.user.id,
         raw_text: data.ocrText,
         parsed_medicine_name: parsedMedicineName,
-        parsed_data: { source: "tesseract" }
+        parsed_data: { source: "tesseract_gemini_edrug", medicines: ocrMedicines }
       });
       throwIfError(uploadResult.error);
 
@@ -324,6 +460,8 @@ export default function HomePage() {
         .insert({
           user_id: userData.user.id,
           item_name: parsedMedicineName,
+          efcy_qesitm: ocrMedicines[0]?.efcyQesitm || null,
+          caution_note: ocrMedicines[0]?.atpnQesitm || ocrMedicines[0]?.atpnWarnQesitm || null,
           raw_ocr_text: data.ocrText,
           source: "ocr"
         })
@@ -344,6 +482,143 @@ export default function HomePage() {
     } catch (error) {
       notify(error.message);
     }
+  }
+
+  async function startPillCamera() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: "environment" } },
+        audio: false
+      });
+      pillStreamRef.current = stream;
+      pillVideoRef.current.srcObject = stream;
+      setPillCameraOn(true);
+      setPillPreviewUrl("");
+      setPillImageBlob(null);
+      setPillPredictions([]);
+      setPillStatus("알약이 화면 중앙에 오게 맞춘 뒤 촬영하세요.");
+    } catch (error) {
+      setPillStatus(error.message || "카메라를 열 수 없습니다.");
+    }
+  }
+
+  function capturePillPhoto() {
+    const video = pillVideoRef.current;
+    const canvas = pillCanvasRef.current;
+    if (!video || !canvas) return;
+    canvas.width = video.videoWidth || 1280;
+    canvas.height = video.videoHeight || 960;
+    const context = canvas.getContext("2d");
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      setPillImageBlob(blob);
+      setPillPreviewUrl(URL.createObjectURL(blob));
+      setPillPredictions([]);
+      setPillStatus("사진이 준비되었습니다. AI 인식을 눌러 주세요.");
+    }, "image/jpeg", 0.92);
+  }
+
+  function handlePillFile(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    stopPillCamera();
+    setPillImageBlob(file);
+    setPillPreviewUrl(URL.createObjectURL(file));
+    setPillPredictions([]);
+    setPillStatus("사진이 준비되었습니다. AI 인식을 눌러 주세요.");
+  }
+
+  async function predictPill() {
+    if (!pillImageBlob) {
+      setPillStatus("먼저 사진을 촬영하거나 선택해 주세요.");
+      return;
+    }
+
+    setPillLoading(true);
+    setPillStatus("누끼 제거 후 모델 추론 중입니다.");
+    try {
+      const formData = new FormData();
+      formData.append("image", pillImageBlob, "pill.jpg");
+      const response = await fetch("/api/pill-recognition", {
+        method: "POST",
+        body: formData
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "AI 인식 실패");
+      setPillPredictions(result.predictions || []);
+      setPillDetails({});
+      setPillStatus("인식 완료");
+    } catch (error) {
+      setPillStatus(error.message);
+      notify(error.message);
+    } finally {
+      setPillLoading(false);
+    }
+  }
+
+  function resetPillRecognition() {
+    setPillPreviewUrl("");
+    setPillImageBlob(null);
+    setPillPredictions([]);
+    setPillDetails({});
+    setPillStatus("카메라를 켜거나 사진을 선택해 주세요.");
+  }
+
+  function stopPillCamera() {
+    pillStreamRef.current?.getTracks().forEach((track) => track.stop());
+    pillStreamRef.current = null;
+    setPillCameraOn(false);
+  }
+
+  async function togglePillDetail(prediction) {
+    const key = prediction.label;
+    const current = pillDetails[key];
+    if (current?.open) {
+      setPillDetails((details) => ({
+        ...details,
+        [key]: { ...current, open: false }
+      }));
+      return;
+    }
+
+    if (current?.data) {
+      setPillDetails((details) => ({
+        ...details,
+        [key]: { ...current, open: true }
+      }));
+      return;
+    }
+
+    setPillDetailLoading(key);
+    try {
+      const response = await fetch(`/api/edrug?itemName=${encodeURIComponent(key)}`);
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || "e약은요 조회 실패");
+      }
+      setPillDetails((details) => ({
+        ...details,
+        [key]: { open: true, data: result }
+      }));
+    } catch (error) {
+      notify(error.message);
+      setPillDetails((details) => ({
+        ...details,
+        [key]: { open: true, error: error.message }
+      }));
+    } finally {
+      setPillDetailLoading("");
+    }
+  }
+
+  function applyPillPrediction(prediction) {
+    setMedicineForm((current) => ({
+      ...current,
+      itemName: prediction.label || current.itemName
+    }));
+    setView("medicines");
+    notify("AI 인식 결과를 약 관리 입력칸에 반영했습니다.");
   }
 
   function updateNextDose() {
@@ -388,7 +663,9 @@ export default function HomePage() {
     medicines: "약 관리",
     records: "복용 기록",
     guardian: "보호자 연동",
+    guardianManage: "보호자 관리",
     ocr: "OCR 약 등록",
+    recognize: "AI 약 인식",
     report: "복약 리포트"
   }[view];
 
@@ -408,7 +685,9 @@ export default function HomePage() {
           <NavButton active={view === "medicines"} icon={<Pill />} onClick={() => selectView("medicines")}>약 관리</NavButton>
           <NavButton active={view === "records"} icon={<ClipboardCheck />} onClick={() => selectView("records")}>복용 기록</NavButton>
           <NavButton active={view === "guardian"} icon={<UserRoundCheck />} onClick={() => selectView("guardian")}>보호자</NavButton>
+          {guardianSession && <NavButton active={view === "guardianManage"} icon={<ShieldCheck />} onClick={() => selectView("guardianManage")}>관리</NavButton>}
           <NavButton active={view === "ocr"} icon={<Camera />} onClick={() => selectView("ocr")}>OCR 등록</NavButton>
+          <NavButton active={view === "recognize"} icon={<ScanSearch />} onClick={() => selectView("recognize")}>AI 인식</NavButton>
           <NavButton active={view === "report"} icon={<BarChart3 />} onClick={() => selectView("report")}>리포트</NavButton>
         </nav>
       </aside>
@@ -469,15 +748,33 @@ export default function HomePage() {
             </Panel>
             <Panel
               eyebrow="로그인"
-              title="Supabase Auth"
-              action={<button className="ghost" onClick={handleLogout}><LogOut />로그아웃</button>}
+              title={authMode === "user" ? "일반 로그인" : "보호자 로그인"}
+              action={authMode === "user" ? <button className="ghost" onClick={handleLogout}><LogOut />로그아웃</button> : <button className="ghost" onClick={handleGuardianLogout}><LogOut />로그아웃</button>}
             >
-              <form className="form" onSubmit={handleLogin}>
-                <label>아이디<input value={loginForm.loginId} onChange={(e) => setLoginForm({ ...loginForm, loginId: e.target.value })} required /></label>
-                <label>비밀번호<input type="password" value={loginForm.password} onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })} required /></label>
-                <button className="primary"><LogIn />로그인</button>
-              </form>
-              <div className="notice">{data.profile ? `${data.profile.name} / 아이디: ${data.profile.login_id}` : "아직 로그인하지 않았습니다."}</div>
+              <div className="auth-tabs">
+                <button className={authMode === "user" ? "active" : ""} type="button" onClick={() => setAuthMode("user")}>일반 로그인</button>
+                <button className={authMode === "guardian" ? "active" : ""} type="button" onClick={() => setAuthMode("guardian")}>보호자 로그인</button>
+              </div>
+
+              {authMode === "user" ? (
+                <>
+                  <form className="form" onSubmit={handleLogin}>
+                    <label>아이디<input value={loginForm.loginId} onChange={(e) => setLoginForm({ ...loginForm, loginId: e.target.value })} required /></label>
+                    <label>비밀번호<input type="password" value={loginForm.password} onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })} required /></label>
+                    <button className="primary"><LogIn />로그인</button>
+                  </form>
+                  <div className="notice">{data.profile ? `${data.profile.name} / 아이디: ${data.profile.login_id}` : "아직 로그인하지 않았습니다."}</div>
+                </>
+              ) : (
+                <>
+                  <form className="form" onSubmit={handleGuardianLogin}>
+                    <label>보호자 이름<input value={guardianLoginForm.name} onChange={(e) => setGuardianLoginForm({ ...guardianLoginForm, name: e.target.value })} required /></label>
+                    <label>보호자 연락처<input value={guardianLoginForm.phone} onChange={(e) => setGuardianLoginForm({ ...guardianLoginForm, phone: e.target.value })} placeholder="01012345678" required /></label>
+                    <button className="primary"><ShieldCheck />보호자 로그인</button>
+                  </form>
+                  <div className="notice">{guardianSession ? `${guardianLoginForm.name} 보호자 / 관리 대상 ${guardianSession.wards.length}명` : guardianStatus || "환자가 등록한 보호자 이름과 연락처로 로그인합니다."}</div>
+                </>
+              )}
             </Panel>
           </div>
         )}
@@ -561,10 +858,59 @@ export default function HomePage() {
           </div>
         )}
 
+        {view === "guardianManage" && (
+          <div className="grid two">
+            <Panel
+              eyebrow="보호자 관리"
+              title="관리 대상 복약 현황"
+              action={<button className="secondary" onClick={refreshGuardianManagement}><RefreshCw />새로고침</button>}
+            >
+              {guardianSession?.wards?.length ? (
+                <div className="ward-list">
+                  {guardianSession.wards.map((ward) => (
+                    <article className="ward-card" key={ward.guardian.id || ward.guardian.user_id}>
+                      <div className="ward-head">
+                        <div>
+                          <p className="label">{ward.guardian.relationship || "보호 대상"}</p>
+                          <h4>{ward.profile?.name || "이름 미등록"}</h4>
+                          <p>{ward.profile?.phone || "연락처 미등록"}</p>
+                        </div>
+                        <strong>{ward.schedules.filter((schedule) => isScheduleTaken(schedule, ward.records)).length}/{ward.schedules.length}</strong>
+                      </div>
+                      <div className="list">
+                        {ward.schedules.length ? ward.schedules.map((schedule) => {
+                          const taken = isScheduleTaken(schedule, ward.records);
+                          return (
+                            <div className="item" key={schedule.id}>
+                              <div>
+                                <h4>{schedule.item_name}</h4>
+                                <p>{trimSeconds(schedule.dose_time)} · {schedule.amount || "복용량 미입력"}</p>
+                              </div>
+                              <span className={`status-pill ${taken ? "done" : ""}`}>{taken ? "복용 완료" : "미복용"}</span>
+                            </div>
+                          );
+                        }) : (
+                          <div className="notice">오늘 등록된 복약 일정이 없습니다.</div>
+                        )}
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <div className="notice">보호자 로그인이 필요합니다. 로그인 화면에서 보호자 이름과 연락처로 로그인하세요.</div>
+              )}
+            </Panel>
+            <Panel eyebrow="상태" title="연동 정보">
+              <div className="notice">{guardianStatus || "보호자 로그인 후 관리 대상자의 오늘 복약 여부를 확인할 수 있습니다."}</div>
+            </Panel>
+          </div>
+        )}
+
         {view === "ocr" && (
           <Panel eyebrow="AI 기반 간편 등록" title="Tesseract OCR 결과를 DB에 저장">
             <div className="ocr-actions">
               <label className="secondary file-btn"><Camera />사진 선택<input type="file" accept="image/*" onChange={handleOcrFile} /></label>
+              <button className="secondary" onClick={() => analyzeOcrMedicines()} disabled={ocrAiLoading}><Sparkles />AI 약명 정리</button>
               <button className="primary" onClick={saveOcrResult}><Database />OCR 결과 저장</button>
             </div>
             <div className="ocr-grid">
@@ -572,9 +918,95 @@ export default function HomePage() {
               <div className="form">
                 <div className="notice">{ocrStatus}</div>
                 <textarea value={data.ocrText} onChange={(e) => setData({ ...data, ocrText: e.target.value })} placeholder="OCR 결과" />
+                <div className="ocr-results">
+                  {ocrMedicines.length ? ocrMedicines.map((medicine, index) => (
+                    <article className="ocr-result" key={`${medicine.name}-${index}`}>
+                      <div>
+                        <p className="label">{medicine.matchStatus || "e약은요 조회"}</p>
+                        <h4>{medicine.itemName || medicine.name}</h4>
+                        <p>{medicine.efcyQesitm || medicine.reason || "효능 정보를 찾지 못했습니다."}</p>
+                      </div>
+                      <button className="secondary" type="button" onClick={() => applyOcrMedicine(medicine)}>반영</button>
+                    </article>
+                  )) : (
+                    <div className="notice">OCR 후 Gemini가 약명을 정리하면 e약은요 설명이 표시됩니다.</div>
+                  )}
+                </div>
               </div>
             </div>
           </Panel>
+        )}
+
+
+        {view === "recognize" && (
+          <div className="grid two">
+            <Panel eyebrow="U2-Net + PyTorch" title="웹캠 촬영 또는 이미지 업로드">
+              <div className="pill-camera">
+                <div className="pill-preview">
+                  {pillPreviewUrl ? (
+                    <img src={pillPreviewUrl} alt="촬영한 알약" />
+                  ) : (
+                    <>
+                      <video ref={pillVideoRef} autoPlay playsInline muted />
+                      {!pillCameraOn && "알약 사진 미리보기"}
+                    </>
+                  )}
+                  <canvas ref={pillCanvasRef} />
+                </div>
+                <div className="ocr-actions">
+                  <button className="secondary" type="button" onClick={startPillCamera}><Camera />카메라</button>
+                  <button className="primary" type="button" onClick={capturePillPhoto} disabled={!pillCameraOn}><ScanSearch />촬영</button>
+                  <label className="secondary file-btn"><ImagePlus />사진 선택<input type="file" accept="image/*" onChange={handlePillFile} /></label>
+                  <button className="primary" type="button" onClick={predictPill} disabled={pillLoading || !pillImageBlob}>{pillLoading ? <Loader2 /> : <Upload />}AI 인식</button>
+                  <button className="ghost" type="button" onClick={resetPillRecognition}><RotateCcw />초기화</button>
+                </div>
+                <div className="notice">{pillStatus}</div>
+              </div>
+            </Panel>
+
+            <Panel eyebrow="Top 3" title="모델 예측 결과">
+              {pillPredictions.length ? (
+                <div className="pill-results">
+                  {pillPredictions.map((prediction) => {
+                    const detail = pillDetails[prediction.label];
+                    return (
+                      <article className="pill-result" key={`${prediction.rank}-${prediction.label}`}>
+                        <span className="rank">{prediction.rank}</span>
+                        <div>
+                          <h4>{prediction.label}</h4>
+                          <div className="bar"><span style={{ width: `${Math.round(prediction.confidence * 100)}%` }} /></div>
+                        </div>
+                        <strong>{Math.round(prediction.confidence * 1000) / 10}%</strong>
+                        <div className="pill-result-actions">
+                          <button className="secondary" type="button" onClick={() => togglePillDetail(prediction)} aria-label={`${prediction.label} 상세 보기`}>
+                            {pillDetailLoading === prediction.label ? <Loader2 /> : detail?.open ? <ChevronUp /> : <ChevronDown />}
+                          </button>
+                          <button className="secondary" type="button" onClick={() => applyPillPrediction(prediction)}>반영</button>
+                        </div>
+                        {detail?.open && (
+                          <div className="pill-detail">
+                            {detail.error ? (
+                              <p>{detail.error}</p>
+                            ) : detail.data ? (
+                              <>
+                                <p className="label">e약은요</p>
+                                <h5>{detail.data.itemName || prediction.label}</h5>
+                                <p>{detail.data.efcyQesitm || "효능 정보를 찾지 못했습니다."}</p>
+                              </>
+                            ) : (
+                              <p>e약은요 정보를 불러오는 중입니다.</p>
+                            )}
+                          </div>
+                        )}
+                      </article>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="notice">인식 결과가 여기에 1, 2, 3위로 표시됩니다.</div>
+              )}
+            </Panel>
+          </div>
         )}
 
         {view === "report" && (
@@ -693,6 +1125,17 @@ function formatDateTime(value) {
     hour: "2-digit",
     minute: "2-digit"
   }).format(new Date(value));
+}
+
+function isScheduleTaken(schedule, records) {
+  const today = new Date().toDateString();
+  return records.some((record) => {
+    const recordDate = new Date(record.taken_at || record.created_at).toDateString();
+    return recordDate === today && (
+      record.schedule_id === schedule.id ||
+      record.medicine_id === schedule.medicine_id
+    );
+  });
 }
 
 function guessMedicineName(text) {

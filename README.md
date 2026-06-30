@@ -37,7 +37,14 @@ npm run dev
 ```txt
 NEXT_PUBLIC_SUPABASE_URL=https://iatjbuglymcwrisaclop.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=Supabase anon public key
+SUPABASE_SERVICE_ROLE_KEY=Supabase service role key (보호자 관리 서버 조회용)
 EDRUG_SERVICE_KEY=e약은요 일반 인증키 Encoding
+GEMINI_API_KEY=Google Gemini API key
+GEMINI_MODEL=gemini-2.5-flash
+PILL_MODEL_PATH=/Users/young/Desktop/wak/best_pill_model.pt
+PILL_CACHE_DIR=/Users/young/Documents/GitHub/alarmE/pill_cache
+PILL_DEVICE=cpu
+REMBG_MODEL=isnet-general-use
 ```
 
 `EDRUG_SERVICE_KEY`는 서버 API route에서만 사용됩니다. 브라우저에 직접 노출하지 않습니다.
@@ -66,3 +73,27 @@ Supabase SQL은 기존 파일을 사용하면 됩니다.
 - 보호자 정보 저장
 - Tesseract OCR 등록
 - 한국 시각 기준 다음 복약 카운트다운
+
+
+## AI 약 인식 Python 패키지
+
+```bash
+python3 -m pip install -r requirements-pill.txt
+```
+
+
+## 로컬 약 정보 fallback
+
+e약은요 API에서 약 정보를 찾지 못하면 `data/local-medicines.json`을 조회합니다.
+
+```json
+[
+  {
+    "itemName": "약 이름",
+    "aliases": ["OCR에서 나올 수 있는 다른 이름"],
+    "efcyQesitm": "효능",
+    "useMethodQesitm": "복용법",
+    "atpnQesitm": "주의사항"
+  }
+]
+```

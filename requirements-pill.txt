@@ -1,0 +1,9 @@
+torch==2.5.1
+torchvision==0.20.1
+timm==1.0.12
+rembg==2.0.61
+onnxruntime==1.20.1
+pillow==11.1.0
+numpy==2.2.1
+opencv-python==4.10.0.84
+scikit-image==0.25.0
