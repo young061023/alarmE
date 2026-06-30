@@ -27,6 +27,7 @@ export async function POST(request) {
   }
 
   const bytes = Buffer.from(await file.arrayBuffer());
+
   if (!bytes.length) {
     return NextResponse.json({ error: "빈 이미지입니다." }, { status: 400 });
   }
@@ -36,7 +37,10 @@ export async function POST(request) {
       const result = await runRemoteRecognition(bytes);
       return NextResponse.json(result);
     } catch (error) {
-      return NextResponse.json({ error: `Hugging Face AI 서버 호출 실패: ${error.message || "알 수 없는 오류"}` }, { status: 500 });
+      return NextResponse.json(
+        { error: `Hugging Face AI 서버 호출 실패: ${error.message || "알 수 없는 오류"}` },
+        { status: 500 }
+      );
     }
   }
 
@@ -47,7 +51,10 @@ export async function POST(request) {
     const result = await runPython(imagePath);
     return NextResponse.json(result);
   } catch (error) {
-    return NextResponse.json({ error: `Render 로컬 Python 인식 실패: ${error.message || "알 수 없는 오류"}` }, { status: 500 });
+    return NextResponse.json(
+      { error: `Render 로컬 Python 인식 실패: ${error.message || "알 수 없는 오류"}` },
+      { status: 500 }
+    );
   }
 }
 
@@ -57,24 +64,34 @@ async function runRemoteRecognition(bytes) {
 
   const response = await fetch(process.env.PILL_RECOGNITION_API_URL, {
     method: "POST",
-    body: formData
+    body: formData,
   });
+
   const text = await response.text();
   let result;
+
   try {
     result = text ? JSON.parse(text) : {};
   } catch {
-    throw new Error(text.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 240) || "AI 서버가 JSON이 아닌 응답을 보냈습니다.");
+    throw new Error(
+      text
+        .replace(/<[^>]+>/g, " ")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 240) || "AI 서버가 JSON이 아닌 응답을 보냈습니다."
+    );
   }
 
   if (!response.ok) {
     throw new Error(result.error || result.detail || "AI 약 인식 서버 오류");
   }
+
   return result;
 }
 
 function maskUrl(url) {
   if (!url) return "";
+
   try {
     const parsed = new URL(url);
     return `${parsed.origin}${parsed.pathname}`;
@@ -101,6 +118,7 @@ function runPython(imagePath) {
     });
 
     child.on("error", reject);
+
     child.on("close", (code) => {
       if (code !== 0) {
         reject(new Error(stderr.trim() || `Python process exited with ${code}`));

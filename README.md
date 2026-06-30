@@ -80,13 +80,11 @@ Supabase SQL은 기존 파일을 사용하면 됩니다.
 - Tesseract OCR 등록
 - 한국 시각 기준 다음 복약 카운트다운
 
-
 ## AI 약 인식 Python 패키지
 
 ```bash
 python3 -m pip install -r requirements-pill.txt
 ```
-
 
 ## 로컬 약 정보 fallback
 
