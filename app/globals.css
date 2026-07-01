@@ -1212,28 +1212,49 @@ main {
 
 .pill-preview {
   position: relative;
-  display: grid;
-  place-items: center;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 100%;
+  min-height: 260px;
   aspect-ratio: 4 / 3;
-  min-height: 280px;
-  border: 1px dashed #c7d3e0;
-  border-radius: 12px;
-  background: var(--soft);
+
+  padding: 20px;
+
+  border: 2px dashed #d4dced;
+  border-radius: 16px;
+
+  background: #f8faff;
+
   color: var(--muted);
+
   overflow: hidden;
   text-align: center;
 }
 
-.pill-preview video,
 .pill-preview img,
+.pill-preview video,
 .pill-preview canvas {
   width: 100%;
   height: 100%;
+
   object-fit: contain;
+  border-radius: 12px;
 }
 
-.pill-preview canvas {
-  display: none;
+.pill-preview p,
+.pill-preview span {
+  margin: 0;
+  width: 100%;
+
+  font-size: 18px;
+  font-weight: 600;
+  color: #7b879c;
+
+  white-space: nowrap;
+  word-break: keep-all;
 }
 
 .pill-results {
@@ -1399,13 +1420,56 @@ main {
   }
 
   .hero {
-    flex-wrap: wrap;
-    padding: 22px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+
+    gap: 18px;
+
+    min-height: auto;
+
+    padding: 20px;
+
+    border-radius: 22px;
+  }
+
+  .hero strong {
+    font-size: 58px;
+    line-height: 1;
+  }
+
+  .hero-sub {
+    font-size: 16px;
   }
 
   .hero-art {
-    width: 120px;
-    height: 100px;
+    align-self: flex-end;
+
+    width: 90px;
+    height: 80px;
+  }
+  .hero-art {
+    opacity: 0.9;
+  }
+  .hero-art {
+    position: absolute;
+
+    right: 18px;
+    top: 18px;
+  }
+  .hero-art .glass {
+    width: 48px;
+    height: 70px;
+  }
+
+  .hero-art .pill-round {
+    width: 28px;
+    height: 28px;
+  }
+
+  .hero-art .pill-capsule {
+    width: 50px;
+    height: 20px;
   }
 
   .hero-actions {
@@ -1415,12 +1479,31 @@ main {
 
   .hero-cta {
     width: 100%;
+    min-height: 52px;
+
+    font-size: 17px;
+
+    border-radius: 30px;
+  }
+
+  .hero-chips {
+    gap: 6px;
+  }
+
+  .hero-chip {
+    font-size: 12px;
+
+    padding: 6px 10px;
   }
 
   .hero-snooze {
-    position: absolute;
-    top: 22px;
-    right: 22px;
+    position: static;
+
+    width: 100%;
+
+    order: 2;
+
+    margin-top: 2px;
   }
 
   .ring-card-body {

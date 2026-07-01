@@ -115,8 +115,12 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
-    updateNextDose();
-    const timer = setInterval(updateNextDose, 1000);
+    updateNextDose(snoozeRef.current);
+
+    const timer = setInterval(() => {
+      updateNextDose(snoozeRef.current);
+    }, 1000);
+
     return () => clearInterval(timer);
   }, [data.schedules]);
 
@@ -708,9 +712,19 @@ export default function HomePage() {
     notify("AI 인식 결과를 약 관리 입력칸에 반영했습니다.");
   }
 
-  function updateNextDose() {
+  function updateNextDose(currentSnooze = snoozeRef.current) {
     const next = getNextSchedule(data.schedules);
-    setNextDose(next);
+
+    if (next) {
+      const addedMs = currentSnooze * 60 * 1000;
+
+      setNextDose({
+        ...next,
+        remainingMs: next.remainingMs + addedMs,
+      });
+    } else {
+      setNextDose(null);
+    }
   }
 
   function requireSupabase() {
@@ -787,8 +801,8 @@ export default function HomePage() {
     records: "복용 기록",
     guardian: "보호자 연동",
     guardianManage: "보호자 관리",
-    ocr: "OCR 약 등록",
-    recognize: "AI 약 인식",
+    ocr: "약 등록",
+    recognize: "처방전 인식",
     report: "복약 리포트",
     doseCheck: "복용 확인",
   }[view];
@@ -873,6 +887,23 @@ export default function HomePage() {
   const [showNotification, setShowNotification] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
 
+  const [nextDoseTime, setNextDoseTime] = useState(new Date());
+  const [snoozed, setSnoozed] = useState(false);
+  // 컴포넌트 상단에 추가
+  const [snoozeMinutes, setSnoozeMinutes] = useState(0);
+  const snoozeRef = useRef(0);
+  function snoozeDose() {
+    if (!nextDose) {
+      notify("연장할 복약 일정이 없습니다.");
+      return;
+    }
+
+    snoozeRef.current += 10;
+    setSnoozeMinutes(snoozeRef.current);
+    updateNextDose(snoozeRef.current);
+    notify("복약 알림이 10분 연기되었습니다.");
+  }
+
   return (
     <div
       className={`app ${menuOpen ? "menu-open" : ""}`}
@@ -936,7 +967,7 @@ export default function HomePage() {
             icon={<ScanSearch />}
             onClick={() => selectView("recognize")}
           >
-            AI 인식
+            처방전 인식
           </NavButton>
           <NavButton
             active={view === "auth"}
@@ -1064,7 +1095,7 @@ export default function HomePage() {
                 </div>
               </div>
               <div className="hero-actions">
-                <button className="hero-snooze">
+                <button className="hero-snooze" onClick={snoozeDose}>
                   <Clock />
                   10분 후 알림
                 </button>
@@ -1247,10 +1278,6 @@ export default function HomePage() {
                 </div>
               </Panel>
             </div>
-
-            <button className="fab" onClick={() => selectView("ocr")}>
-              <Camera />약 등록
-            </button>
           </section>
         )}
 
@@ -1849,7 +1876,9 @@ export default function HomePage() {
                   ) : (
                     <>
                       <video ref={pillVideoRef} autoPlay playsInline muted />
-                      {!pillCameraOn && "알약 사진 미리보기"}
+                      {!pillCameraOn && (
+                        <p className="preview-text">알약 사진 미리보기</p>
+                      )}
                     </>
                   )}
                   <canvas ref={pillCanvasRef} />
@@ -2076,7 +2105,7 @@ export default function HomePage() {
               action={
                 <button className="secondary" onClick={exportCsv}>
                   <Download />
-                  CSV
+                  기록 다운로드
                 </button>
               }
             >
@@ -2168,10 +2197,10 @@ export default function HomePage() {
 
         <button
           className={view === "pillAI" ? "active" : ""}
-          onClick={() => selectView("recognize")}
+          onClick={() => selectView("ocr")}
         >
           <Camera />
-          <span>AI 인식</span>
+          <span>처방전 인식</span>
         </button>
 
         <button
@@ -2189,15 +2218,6 @@ export default function HomePage() {
       </nav>
       {showMoreMenu && (
         <div className="mobile-more-menu">
-          <button
-            onClick={() => {
-              selectView("medicines");
-              setShowMoreMenu(false);
-            }}
-          >
-            <Search />약 조회
-          </button>
-
           <button
             onClick={() => {
               selectView("report");
@@ -2229,6 +2249,9 @@ export default function HomePage() {
           </button>
         </div>
       )}
+      <button className="fab" onClick={() => selectView("recognize")}>
+        <Camera />약 등록
+      </button>
 
       <div className={`toast ${toast ? "show" : ""}`}>{toast}</div>
     </div>
