@@ -49,8 +49,6 @@ button {
   grid-template-columns: 240px minmax(0, 1fr);
   min-height: 100vh;
 }
-
-/* ---------- sidebar ---------- */
 .side {
   position: sticky;
   top: 0;
@@ -201,7 +199,6 @@ svg {
   height: 18px;
 }
 
-/* ---------- main / header ---------- */
 main {
   min-width: 0;
   padding: 0 32px 60px;
@@ -327,7 +324,6 @@ main {
   box-shadow: var(--shadow);
 }
 
-/* ---------- hero ---------- */
 .hero {
   position: relative;
   display: flex;
@@ -515,7 +511,6 @@ main {
   height: 15px;
 }
 
-/* ---------- dashboard metric cards ---------- */
 .metrics {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -547,7 +542,6 @@ main {
   color: var(--primary);
 }
 
-/* adherence ring card */
 .ring-card-body {
   display: flex;
   align-items: center;
@@ -598,7 +592,6 @@ main {
   font-weight: 700;
 }
 
-/* risk card */
 .risk-card-body {
   display: flex;
   align-items: center;
@@ -653,7 +646,6 @@ main {
   height: 28px;
 }
 
-/* AI info card */
 .ai-card {
   background: var(--primary-light);
   border-color: transparent;
@@ -709,7 +701,6 @@ main {
   height: 28px;
 }
 
-/* ---------- lower grid: schedule + chart ---------- */
 .grid.two {
   display: grid;
   grid-template-columns: minmax(0, 1.05fr) minmax(300px, 1fr);
@@ -922,7 +913,6 @@ main {
   margin-bottom: 6px;
 }
 
-/* ---------- floating action button ---------- */
 .fab {
   position: fixed;
   right: 30px;
@@ -951,7 +941,6 @@ main {
   display: none;
 }
 
-/* ---------- generic form / list styles (other views) ---------- */
 .form {
   display: grid;
   gap: 12px;
@@ -1895,4 +1884,169 @@ main {
 
 .mobile-more-menu button:hover {
   background: #eaf0ff;
+}
+
+.report-cta {
+  width: 100%;
+  margin-top: 20px;
+  padding: 14px 18px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  background: #ffffff;
+  border: 1.5px solid #8a8a8a;
+  border-radius: 8px;
+
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  font-family: inherit;
+}
+
+.report-cta:hover {
+  background: #f8fafc;
+  border-color: #4f66f3;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(79, 102, 243, 0.12);
+}
+
+.report-cta:active {
+  transform: translateY(0);
+}
+
+.report-cta-text {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  font-size: 17px;
+  font-weight: 500;
+  color: #1f2937;
+}
+
+.report-cta-text svg {
+  width: 22px;
+  height: 22px;
+  color: #111827;
+}
+
+.report-cta > svg {
+  width: 22px;
+  height: 22px;
+  color: #111827;
+  transition: transform 0.2s ease;
+}
+
+.report-cta:hover > svg {
+  transform: translateX(4px);
+}
+
+.edit-page {
+  max-width: 700px;
+  margin: 0 auto;
+}
+
+.edit-page .form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.edit-page label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.edit-page input,
+.edit-page textarea {
+  width: 100%;
+  padding: 12px 14px;
+
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+
+  font-size: 15px;
+  outline: none;
+
+  transition: 0.2s;
+}
+
+.edit-page input:focus,
+.edit-page textarea:focus {
+  border-color: #4f66f3;
+  box-shadow: 0 0 0 3px rgba(79, 102, 243, 0.12);
+}
+
+.edit-page textarea {
+  min-height: 100px;
+  resize: vertical;
+}
+
+.edit-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.edit-actions button {
+  flex: 1;
+}
+.edit-btn {
+  background: #4f66f3;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.edit-btn:hover {
+  background: #3655f0;
+  transform: translateY(-1px);
+}
+
+.save-btn {
+  background: #4f66f3;
+  color: white;
+  border: none;
+  border-radius: 10px;
+  padding: 13px;
+
+  font-size: 16px;
+  font-weight: 700;
+
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.save-btn:hover {
+  background: #3655f0;
+}
+
+.cancel-btn {
+  background: #f3f4f6;
+  color: #374151;
+
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+
+  padding: 13px;
+
+  font-size: 16px;
+  font-weight: 700;
+
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.cancel-btn:hover {
+  background: #e5e7eb;
 }
