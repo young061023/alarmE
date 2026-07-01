@@ -378,8 +378,8 @@ export default function HomePage() {
       setMedicineForm({
         itemName: "",
         efcyQesitm: "",
-        doseTime: "",
-        amount: "정",
+        doseTime: "08:00",
+        amount: "1정",
         cautionNote: "",
       });
       notify("약과 복용 일정이 저장되었습니다.");
@@ -859,7 +859,11 @@ export default function HomePage() {
     : 0;
   const risk = getOverdoseRisk(data.schedules);
   const aiTip = getAiTip(data.medicines);
-  const weeklyBars = getWeeklyAdherence(data.records, todayTotal);
+  const weeklyBars = getWeeklyAdherence(data.records, data.schedules);
+  const weeklyAdherencePercent = calculateAdherence(
+    data.records,
+    data.schedules,
+  );
   const [takenMedicines, setTakenMedicines] = useState([]);
   const [aiMedicine, setAiMedicine] = useState(null);
   const [notifications, setNotifications] = useState([]);
@@ -881,7 +885,7 @@ export default function HomePage() {
       now.getMinutes().toString().padStart(2, "0");
 
     data.schedules.forEach((schedule) => {
-      if (schedule.time === current) {
+      if (trimSeconds(schedule.dose_time) === current) {
         setNotifications((prev) => {
           const exists = prev.some(
             (n) =>
@@ -1174,7 +1178,9 @@ export default function HomePage() {
                     <strong>
                       {todayTotal}회 중 {todayTaken}회{"\n"}복용 완료
                     </strong>
-                    <p>오늘 목표 {todayTotal}회</p>
+                    <p>
+                      오늘 목표 {todayTotal}회 · 일일 복용률 {adherencePercent}%
+                    </p>
                   </div>
                 </div>
               </article>
@@ -1294,12 +1300,9 @@ export default function HomePage() {
                 titleIcon={<BarChart3 />}
                 title="이번 주 복약 현황"
                 action={
-                  <button
-                    className="link-btn"
-                    onClick={() => selectView("report")}
-                  >
-                    자세히 보기
-                  </button>
+                  <span className="label" style={{ fontWeight: 800 }}>
+                    이번 주 {weeklyAdherencePercent}%
+                  </span>
                 }
               >
                 <div className="bar-chart">
@@ -1308,6 +1311,9 @@ export default function HomePage() {
                       className={`bar-col ${bar.isToday ? "today" : ""} ${bar.isFuture ? "future" : ""}`}
                       key={bar.label}
                     >
+                      <span className="bar-pct">
+                        {bar.isFuture ? "" : `${bar.percent}%`}
+                      </span>
                       <div className="bar-track">
                         <div
                           className="bar-fill"
@@ -1317,6 +1323,17 @@ export default function HomePage() {
                       <span>{bar.label}</span>
                     </div>
                   ))}
+                </div>
+                <div className="notice" style={{ marginTop: 12 }}>
+                  자세한 리포트는{" "}
+                  <button
+                    className="link-btn"
+                    style={{ padding: "3px 8px" }}
+                    onClick={() => selectView("report")}
+                  >
+                    리포트
+                  </button>{" "}
+                  화면에서 확인할 수 있어요.
                 </div>
               </Panel>
             </div>
@@ -2072,14 +2089,14 @@ export default function HomePage() {
                 <h3>이번 주 복약 순응도</h3>
 
                 <div className="report-score-big">
-                  {calculateAdherence(data.records, data.schedules)}%
+                  {weeklyAdherencePercent}%
                 </div>
 
                 <div className="progress">
                   <div
                     className="progress-fill"
                     style={{
-                      width: `${calculateAdherence(data.records, data.schedules)}%`,
+                      width: `${weeklyAdherencePercent}%`,
                     }}
                   />
                 </div>
@@ -2126,24 +2143,48 @@ export default function HomePage() {
               </div>
             </div>
 
+            {/* 오늘 복용률 */}
+            <div className="report-score-card">
+              <h3>오늘의 복용률</h3>
+              <div className="report-score-big">{adherencePercent}%</div>
+              <div className="progress">
+                <div
+                  className="progress-fill"
+                  style={{ width: `${adherencePercent}%` }}
+                />
+              </div>
+              <p className="muted" style={{ marginTop: 8 }}>
+                오늘 {todayTotal}회 중 {todayTaken}회 복용 완료
+              </p>
+            </div>
+
             {/* 이번 주 그래프 */}
 
             <Panel eyebrow="이번 주" title="요일별 복약률">
               <div className="bar-chart">
                 {weeklyBars.map((bar) => (
-                  <div className="bar-col" key={bar.label}>
-                    <div
-                      className="bar"
-                      style={{
-                        height: `${Math.max(bar.pct, 5)}%`,
-                        background:
-                          bar.pct >= 80
-                            ? "#2bb673"
-                            : bar.pct >= 50
-                              ? "#f6b94d"
-                              : "#e0524f",
-                      }}
-                    />
+                  <div
+                    className={`bar-col ${bar.isToday ? "today" : ""} ${bar.isFuture ? "future" : ""}`}
+                    key={bar.label}
+                  >
+                    <span className="bar-pct">
+                      {bar.isFuture ? "" : `${bar.percent}%`}
+                    </span>
+                    <div className="bar-track">
+                      <div
+                        className="bar-fill"
+                        style={{
+                          height: `${Math.max(bar.percent, bar.isFuture ? 0 : 4)}%`,
+                          background: bar.isFuture
+                            ? undefined
+                            : bar.percent >= 80
+                              ? "#2bb673"
+                              : bar.percent >= 50
+                                ? "#f6b94d"
+                                : "#e0524f",
+                        }}
+                      />
+                    </div>
                     <span>{bar.label}</span>
                   </div>
                 ))}
@@ -2442,7 +2483,22 @@ function guessMedicineName(text) {
 
 function calculateAdherence(records, schedules) {
   if (!schedules.length) return 0;
-  return Math.min(100, Math.round((records.length / schedules.length) * 100));
+  const now = new Date();
+  const day = now.getDay() === 0 ? 7 : now.getDay();
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - (day - 1));
+  monday.setHours(0, 0, 0, 0);
+
+  const weekRecords = records.filter((record) => {
+    const recordDate = new Date(record.taken_at || record.created_at);
+    return recordDate >= monday && recordDate <= now;
+  });
+
+  const elapsedDays = day; // 월요일부터 오늘까지 지난 일수 (오늘 포함)
+  const expectedDoses = schedules.length * elapsedDays;
+  if (!expectedDoses) return 0;
+
+  return Math.min(100, Math.round((weekRecords.length / expectedDoses) * 100));
 }
 
 function getOverdoseRisk(schedules) {
@@ -2473,11 +2529,13 @@ function getAiTip(medicines) {
   return "혈압약은 식후 복용을 권장해요. 자몽 주스와 함께 복용하면 약효가 강해질 수 있어요.";
 }
 
-function getWeeklyAdherence(records, todayTotal) {
+function getWeeklyAdherence(records, schedules) {
   const now = new Date();
   const day = now.getDay() === 0 ? 7 : now.getDay();
   const monday = new Date(now);
   monday.setDate(now.getDate() - (day - 1));
+
+  const totalPerDay = schedules.length;
 
   return WEEK_LABELS.map((label, index) => {
     const date = new Date(monday);
@@ -2494,12 +2552,13 @@ function getWeeklyAdherence(records, todayTotal) {
       return recordDate.toDateString() === date.toDateString();
     });
 
-    const percent = todayTotal
-      ? Math.min(100, Math.round((dayRecords.length / todayTotal) * 100))
+    const percent = totalPerDay
+      ? Math.min(100, Math.round((dayRecords.length / totalPerDay) * 100))
       : 0;
+
     return {
       label,
-      percent: percent || (isToday ? 0 : 70 + ((index * 3) % 20)),
+      percent,
       isFuture: false,
       isToday,
     };

@@ -1311,6 +1311,33 @@ main {
   align-items: center;
 }
 
+.item-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.danger-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid #f0caca;
+  border-radius: 10px;
+  background: #fff5f5;
+  color: var(--danger);
+}
+
+.danger-icon:hover {
+  background: #ffe8e8;
+  transform: translateY(-1px);
+}
+
+.danger-icon svg {
+  width: 17px;
+  height: 17px;
+}
+
 .pill-detail {
   grid-column: 1 / -1;
   padding: 12px;
