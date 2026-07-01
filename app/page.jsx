@@ -33,6 +33,7 @@ import {
   Settings,
   ShieldCheck,
   Upload,
+  Trash2,
   UserPlus,
   UserRound,
   UserRoundCheck,
@@ -382,6 +383,47 @@ export default function HomePage() {
         cautionNote: "",
       });
       notify("약과 복용 일정이 저장되었습니다.");
+      await syncFromDatabase();
+    } catch (error) {
+      notify(error.message);
+    }
+  }
+
+  async function deleteMedicine(medicine) {
+    if (!requireLogin()) return;
+    if (
+      !window.confirm(
+        `${medicine.item_name}을(를) 삭제할까요? 복용 일정과 기록도 함께 삭제됩니다.`,
+      )
+    ) {
+      return;
+    }
+
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      const userId = userData.user.id;
+      const scheduleResult = await supabase
+        .from("medication_schedules")
+        .delete()
+        .eq("user_id", userId)
+        .eq("medicine_id", medicine.id);
+      throwIfError(scheduleResult.error);
+
+      const recordResult = await supabase
+        .from("dose_records")
+        .delete()
+        .eq("user_id", userId)
+        .eq("medicine_id", medicine.id);
+      throwIfError(recordResult.error);
+
+      const medicineResult = await supabase
+        .from("medicines")
+        .delete()
+        .eq("user_id", userId)
+        .eq("id", medicine.id);
+      throwIfError(medicineResult.error);
+
+      notify(`${medicine.item_name} 삭제 완료`);
       await syncFromDatabase();
     } catch (error) {
       notify(error.message);
@@ -1563,7 +1605,18 @@ export default function HomePage() {
                           "효능/주의사항 미입력"}
                       </p>
                     </div>
-                    <span className="label">{item.source}</span>
+                    <div className="item-actions">
+                      <span className="label">{item.source}</span>
+                      <button
+                        type="button"
+                        className="danger-icon"
+                        onClick={() => deleteMedicine(item)}
+                        aria-label={`${item.item_name} 삭제`}
+                        title="삭제"
+                      >
+                        <Trash2 />
+                      </button>
+                    </div>
                   </div>
                 )}
               />
