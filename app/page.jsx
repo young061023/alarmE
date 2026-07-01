@@ -871,6 +871,7 @@ export default function HomePage() {
     );
   }, [data.schedules]);
   const [showNotification, setShowNotification] = useState(false);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
 
   return (
     <div
@@ -2153,36 +2154,81 @@ export default function HomePage() {
           className={view === "dashboard" ? "active" : ""}
           onClick={() => selectView("dashboard")}
         >
-          <Home />홈
+          <Home />
+          <span>홈</span>
         </button>
+
         <button
           className={view === "records" ? "active" : ""}
           onClick={() => selectView("records")}
         >
           <ClipboardCheck />
-          복약 기록
+          <span>복약 기록</span>
         </button>
+
+        <button
+          className={view === "pillAI" ? "active" : ""}
+          onClick={() => selectView("recognize")}
+        >
+          <Camera />
+          <span>AI 인식</span>
+        </button>
+
         <button
           className={view === "medicines" ? "active" : ""}
           onClick={() => selectView("medicines")}
         >
-          <Pill />약 목록
+          <Pill />
+          <span>약 목록</span>
         </button>
-        <button
-          className={view === "report" ? "active" : ""}
-          onClick={() => selectView("report")}
-        >
-          <BarChart3 />
-          리포트
-        </button>
-        <button
-          className={view === "auth" ? "active" : ""}
-          onClick={() => selectView("auth")}
-        >
-          <Settings />
-          설정
+
+        <button onClick={() => setShowMoreMenu(!showMoreMenu)}>
+          <Menu />
+          <span>더보기</span>
         </button>
       </nav>
+      {showMoreMenu && (
+        <div className="mobile-more-menu">
+          <button
+            onClick={() => {
+              selectView("medicines");
+              setShowMoreMenu(false);
+            }}
+          >
+            <Search />약 조회
+          </button>
+
+          <button
+            onClick={() => {
+              selectView("report");
+              setShowMoreMenu(false);
+            }}
+          >
+            <BarChart3 />
+            리포트
+          </button>
+
+          <button
+            onClick={() => {
+              selectView("auth");
+              setShowMoreMenu(false);
+            }}
+          >
+            <UserRound />
+            로그인
+          </button>
+
+          <button
+            onClick={() => {
+              selectView("guardian");
+              setShowMoreMenu(false);
+            }}
+          >
+            <ShieldCheck />
+            보호자
+          </button>
+        </div>
+      )}
 
       <div className={`toast ${toast ? "show" : ""}`}>{toast}</div>
     </div>
